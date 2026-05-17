@@ -28,5 +28,11 @@
       "dest": "/api/index.php"
     }
   ],
+  "crons": [
+    {
+      "path": "/api/cron/reminders",
+      "schedule": "* * * * *"
+    }
+  ],
   "outputDirectory": "public"
 }
