@@ -11,6 +11,12 @@ if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'OPTIONS
     exit();
 }
 
+if (isset($_GET['debug_server'])) {
+    header("Content-Type: application/json");
+    echo json_encode($_SERVER, JSON_PRETTY_PRINT);
+    exit();
+}
+
 try {
     require __DIR__ . '/../public/index.php';
 } catch (\Throwable $e) {
