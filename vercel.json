@@ -3,6 +3,9 @@
   "functions": {
     "api/index.php": {
       "runtime": "vercel-php@0.8.0"
+    },
+    "api/test_db.php": {
+      "runtime": "vercel-php@0.8.0"
     }
   },
   "headers": [
@@ -16,6 +19,10 @@
     }
   ],
   "routes": [
+    {
+      "src": "/api/test_db.php",
+      "dest": "/api/test_db.php"
+    },
     {
       "src": "/build/(.*)",
       "dest": "/public/build/$1"
