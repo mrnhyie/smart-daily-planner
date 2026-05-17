@@ -4,7 +4,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 
-return Application::configure(basePath: dirname(__DIR__))
+$app = Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
@@ -27,3 +27,13 @@ return Application::configure(basePath: dirname(__DIR__))
             exit();
         });
     })->create();
+
+if (isset($_SERVER['NOW_REGION']) || env('LOG_CHANNEL') === 'stderr') {
+    $bootstrapPath = '/tmp/bootstrap';
+    if (!is_dir($bootstrapPath . '/cache')) {
+        mkdir($bootstrapPath . '/cache', 0755, true);
+    }
+    $app->useBootstrapPath($bootstrapPath);
+}
+
+return $app;
