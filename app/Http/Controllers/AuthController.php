@@ -20,7 +20,8 @@ class AuthController extends Controller
         $user = User::query()->create([
             'name' => $fields['name'],
             'email' => $fields['email'],
-            'password' => Hash::make($fields['password']) // Using Hash::make for consistency
+            'phone' => $fields['phone'],
+            'password' => Hash::make($fields['password'])
         ]);
 
         $token = $user->createToken('myapp-token')->plainTextToken;

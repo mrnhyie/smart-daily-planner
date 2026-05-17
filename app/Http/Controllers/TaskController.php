@@ -1,7 +1,6 @@
 <?php
 
 namespace App\Http\Controllers;
-namespace App\Http\Controllers;
 
 use App\Models\Task;
 use Illuminate\Http\Request;
@@ -11,7 +10,13 @@ class TaskController extends Controller
 {
     public function index()
     {
-        return response()->json(Auth::user()->tasks()->latest()->get());
+        return response()->json(
+            Auth::user()
+                ->tasks()
+                ->orderBy('task_order')
+                ->orderByDesc('created_at')
+                ->get()
+        );
     }
 
     public function store(Request $request)
@@ -19,6 +24,8 @@ class TaskController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
+            'reminder_time' => 'nullable|date_format:H:i',
+            'task_order' => 'nullable|integer|min:0|max:2',
         ]);
 
         $task = Auth::user()->tasks()->create($validated);
@@ -39,7 +46,9 @@ class TaskController extends Controller
         $validated = $request->validate([
             'title' => 'sometimes|string|max:255',
             'description' => 'nullable|string',
-            'is_completed' => 'boolean'
+            'is_completed' => 'boolean',
+            'reminder_time' => 'nullable|date_format:H:i',
+            'task_order' => 'nullable|integer|min:0|max:2',
         ]);
 
         $task->update($validated);

@@ -35,4 +35,14 @@ return [
         ],
     ],
 
+    'reminders' => [
+        'base_url' => env('REMINDER_GATEWAY_URL', 'http://127.0.0.1:3001'),
+    ],
+
+    'webpush' => [
+        'subject' => env('WEBPUSH_SUBJECT', 'mailto:admin@smartdailyplanner.local'),
+        'public_key' => env('WEBPUSH_PUBLIC_KEY'),
+        'private_key' => env('WEBPUSH_PRIVATE_KEY'),
+    ],
+
 ];
