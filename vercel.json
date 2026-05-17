@@ -1,5 +1,8 @@
 {
   "version": 2,
+  "env": {
+    "LOG_CHANNEL": "stderr"
+  },
   "functions": {
     "api/index.php": {
       "runtime": "vercel-php@0.8.0"
