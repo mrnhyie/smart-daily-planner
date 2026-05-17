@@ -25,10 +25,9 @@ try {
         
         $dsn = "pgsql:host=" . $parsed['host'] . ";port=" . ($parsed['port'] ?? 5432) . ";dbname=" . ltrim($parsed['path'], '/') . ";sslmode=require";
         $pdo = new PDO($dsn, $parsed['user'], $parsed['pass']);
+        $stmt = $pdo->query("SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema'");
+        $results['tables'] = $stmt->fetchAll(PDO::FETCH_COLUMN);
         $results['connection_status'] = 'success';
-        
-        $stmt = $pdo->query("SELECT CURRENT_TIMESTAMP");
-        $results['query_result'] = $stmt->fetch(PDO::FETCH_ASSOC);
     } else {
         $results['connection_status'] = 'no_db_url_provided';
     }
