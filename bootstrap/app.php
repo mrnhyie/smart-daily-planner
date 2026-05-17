@@ -15,17 +15,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        $exceptions->render(function (\Throwable $e) {
-            header("Content-Type: application/json");
-            echo json_encode([
-                'original_exception' => get_class($e),
-                'original_message' => $e->getMessage(),
-                'original_file' => $e->getFile(),
-                'original_line' => $e->getLine(),
-                'original_trace' => explode("\n", $e->getTraceAsString()),
-            ], JSON_PRETTY_PRINT);
-            exit();
-        });
+        //
     })->create();
 
 if (isset($_SERVER['NOW_REGION']) || env('LOG_CHANNEL') === 'stderr') {
