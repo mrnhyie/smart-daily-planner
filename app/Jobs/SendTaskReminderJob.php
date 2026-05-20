@@ -34,8 +34,12 @@ class SendTaskReminderJob implements ShouldQueue
                 return;
             }
 
-            $gateway->sendWhatsapp($task->user->phone, $this->messageForTask($task));
-            $task->update(['last_whatsapp_reminded_on' => $today]);
+            try {
+                $gateway->sendWhatsapp($task->user->phone, $this->messageForTask($task));
+                $task->update(['last_whatsapp_reminded_on' => $today]);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error("WhatsApp Reminder failed for task {$task->id}: " . $e->getMessage());
+            }
             return;
         }
 
@@ -44,8 +48,12 @@ class SendTaskReminderJob implements ShouldQueue
                 return;
             }
 
-            $gateway->sendSms($task->user->phone, $this->messageForTask($task));
-            $task->update(['last_sms_reminded_on' => $today]);
+            try {
+                $gateway->sendSms($task->user->phone, $this->messageForTask($task));
+                $task->update(['last_sms_reminded_on' => $today]);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error("SMS Reminder failed for task {$task->id}: " . $e->getMessage());
+            }
             return;
         }
 
@@ -54,13 +62,16 @@ class SendTaskReminderJob implements ShouldQueue
                 return;
             }
 
-            $webPushService->sendToUser(
-                $task->user,
-                'Task Reminder',
-                $this->messageForTask($task)
-            );
-
-            $task->update(['last_push_reminded_on' => $today]);
+            try {
+                $webPushService->sendToUser(
+                    $task->user,
+                    'Task Reminder',
+                    $this->messageForTask($task)
+                );
+                $task->update(['last_push_reminded_on' => $today]);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error("Push Reminder failed for task {$task->id}: " . $e->getMessage());
+            }
         }
     }
 
