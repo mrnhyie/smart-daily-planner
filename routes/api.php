@@ -121,6 +121,20 @@ Route::get('/debug-push-subscriptions', function () {
     }
 });
 
+// Temporary route to purge ALL push subscriptions (use once to clear stale VAPID-key subscriptions)
+Route::delete('/debug-push-subscriptions/purge', function () {
+    try {
+        $deleted = \App\Models\PushSubscription::query()->delete();
+        return response()->json([
+            'status'  => 'success',
+            'deleted' => $deleted,
+            'message' => 'All push subscriptions purged. Users must re-enable push in the app.',
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json(['error' => $e->getMessage()], 500);
+    }
+});
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
