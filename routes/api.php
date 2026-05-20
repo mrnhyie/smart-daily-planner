@@ -12,11 +12,38 @@ Route::post('/login', [AuthController::class, 'login']);
 
 // Public cron trigger route
 Route::get('/cron/reminders', function () {
-    \Illuminate\Support\Facades\Artisan::call('reminders:dispatch-due');
-    return response()->json([
-        'status' => 'success',
-        'output' => \Illuminate\Support\Facades\Artisan::output(),
-    ]);
+    try {
+        \Illuminate\Support\Facades\Artisan::call('reminders:dispatch-due');
+        return response()->json([
+            'status' => 'success',
+            'output' => \Illuminate\Support\Facades\Artisan::output(),
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => explode("\n", $e->getTraceAsString()),
+        ], 500);
+    }
+});
+
+// Temporary route to run migrations in production on Vercel
+Route::get('/run-migrations', function () {
+    try {
+        \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+        return response()->json([
+            'status' => 'success',
+            'output' => \Illuminate\Support\Facades\Artisan::output(),
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => $e->getMessage(),
+            'trace' => explode("\n", $e->getTraceAsString()),
+        ], 500);
+    }
 });
 
 Route::middleware('auth:sanctum')->group(function () {
