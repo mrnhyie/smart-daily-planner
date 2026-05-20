@@ -25,7 +25,7 @@ Route::get('/cron/reminders', function () {
             'file' => $e->getFile(),
             'line' => $e->getLine(),
             'trace' => explode("\n", $e->getTraceAsString()),
-        ], 500);
+        ], 200);
     }
 });
 
