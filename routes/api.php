@@ -122,7 +122,11 @@ Route::get('/debug-push-subscriptions', function () {
 });
 
 // Temporary route to purge ALL push subscriptions (use once to clear stale VAPID-key subscriptions)
-Route::delete('/debug-push-subscriptions/purge', function () {
+// Using GET so it works reliably in Vercel's PHP serverless runtime.
+Route::get('/debug-push-subscriptions/purge', function (\Illuminate\Http\Request $request) {
+    if ($request->query('token') !== 'purge-vapid-2024') {
+        return response()->json(['error' => 'Unauthorized'], 403);
+    }
     try {
         $deleted = \App\Models\PushSubscription::query()->delete();
         return response()->json([
