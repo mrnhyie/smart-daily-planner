@@ -58,6 +58,42 @@ Route::get('/debug-sms-config', function () {
     ]);
 });
 
+// Dynamic SMS test endpoint to diagnose Agoo API responses with different sender IDs
+Route::get('/test-sms-gateway', function (\Illuminate\Http\Request $request) {
+    $apiKey = env('AGOO_SMS_API_KEY');
+    $senderId = $request->query('sender_id', env('AGOO_SMS_SENDER_ID', 'SDPLANNER'));
+    $to = $request->query('to', '+233591063119');
+    $message = $request->query('message', 'Test message from Daily Planner gateway.');
+
+    if (empty($apiKey)) {
+        return response()->json(['error' => 'AGOO_SMS_API_KEY is not set.'], 400);
+    }
+
+    try {
+        $response = \Illuminate\Support\Facades\Http::timeout(15)
+            ->withHeaders([
+                'X-API-Key' => $apiKey,
+                'Content-Type' => 'application/json',
+            ])
+            ->post('https://api.agoosms.com/v1/sms/send', [
+                'to' => $to,
+                'message' => $message,
+                'sender_id' => $senderId,
+            ]);
+
+        return response()->json([
+            'sender_id_used' => $senderId,
+            'api_status' => $response->status(),
+            'api_response' => $response->json(),
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'error' => $e->getMessage(),
+            'sender_id_used' => $senderId,
+        ], 500);
+    }
+});
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
