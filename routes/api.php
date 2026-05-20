@@ -98,6 +98,29 @@ Route::get('/test-sms-gateway', function (\Illuminate\Http\Request $request) {
     }
 });
 
+// Temporary route to debug push subscriptions in database
+Route::get('/debug-push-subscriptions', function () {
+    try {
+        $count = \App\Models\PushSubscription::count();
+        $subscriptions = \App\Models\PushSubscription::with('user')->get();
+        return response()->json([
+            'total_subscriptions_count' => $count,
+            'vapid_configured' => (bool) config('services.webpush.public_key') && (bool) config('services.webpush.private_key'),
+            'public_key_first_10' => substr((string) config('services.webpush.public_key'), 0, 10) . '...',
+            'subscriptions' => $subscriptions->map(fn($s) => [
+                'id' => $s->id,
+                'user_id' => $s->user_id,
+                'user_name' => $s->user?->name,
+                'user_phone' => $s->user?->phone,
+                'endpoint_domain' => parse_url($s->endpoint, PHP_URL_HOST),
+                'created_at' => $s->created_at?->toDateTimeString(),
+            ]),
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json(['error' => $e->getMessage()], 500);
+    }
+});
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
