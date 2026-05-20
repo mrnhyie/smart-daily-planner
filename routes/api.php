@@ -70,16 +70,20 @@ Route::get('/test-sms-gateway', function (\Illuminate\Http\Request $request) {
     }
 
     try {
+        $body = [
+            'to' => $to,
+            'message' => $message,
+        ];
+        if ($senderId !== 'OMIT') {
+            $body['sender_id'] = $senderId;
+        }
+
         $response = \Illuminate\Support\Facades\Http::timeout(15)
             ->withHeaders([
                 'X-API-Key' => $apiKey,
                 'Content-Type' => 'application/json',
             ])
-            ->post('https://api.agoosms.com/v1/sms/send', [
-                'to' => $to,
-                'message' => $message,
-                'sender_id' => $senderId,
-            ]);
+            ->post('https://api.agoosms.com/v1/sms/send', $body);
 
         return response()->json([
             'sender_id_used' => $senderId,
