@@ -46,6 +46,18 @@ Route::get('/run-migrations', function () {
     }
 });
 
+// Temporary diagnostic route – REMOVE after debugging
+Route::get('/debug-sms-config', function () {
+    $apiKey = env('AGOO_SMS_API_KEY', '(NOT SET)');
+    $senderId = env('AGOO_SMS_SENDER_ID', '(NOT SET - using default SDPLANNER)');
+    return response()->json([
+        'sender_id' => $senderId,
+        'api_key_first_8' => substr($apiKey, 0, 8) . '...',
+        'api_key_length' => strlen($apiKey),
+        'all_agoo_env_keys' => collect($_ENV)->filter(fn($v, $k) => str_contains(strtolower($k), 'agoo'))->keys(),
+    ]);
+});
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
