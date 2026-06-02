@@ -46,58 +46,6 @@ Route::get('/run-migrations', function () {
     }
 });
 
-// Temporary diagnostic route – REMOVE after debugging
-Route::get('/debug-sms-config', function () {
-    $apiKey = env('AGOO_SMS_API_KEY', '(NOT SET)');
-    $senderId = env('AGOO_SMS_SENDER_ID', '(NOT SET - using default SDPLANNER)');
-    return response()->json([
-        'sender_id' => $senderId,
-        'api_key_first_8' => substr($apiKey, 0, 8) . '...',
-        'api_key_length' => strlen($apiKey),
-        'all_agoo_env_keys' => collect($_ENV)->filter(fn($v, $k) => str_contains(strtolower($k), 'agoo'))->keys(),
-    ]);
-});
-
-// Dynamic SMS test endpoint to diagnose Agoo API responses with different sender IDs
-Route::get('/test-sms-gateway', function (\Illuminate\Http\Request $request) {
-    $apiKey = env('AGOO_SMS_API_KEY');
-    $senderId = $request->query('sender_id', env('AGOO_SMS_SENDER_ID', 'SDPLANNER'));
-    $to = $request->query('to', '+233591063119');
-    $message = $request->query('message', 'Test message from Daily Planner gateway.');
-
-    if (empty($apiKey)) {
-        return response()->json(['error' => 'AGOO_SMS_API_KEY is not set.'], 400);
-    }
-
-    try {
-        $body = [
-            'to' => $to,
-            'message' => $message,
-        ];
-        if ($senderId !== 'OMIT') {
-            $body['sender_id'] = $senderId;
-        }
-
-        $response = \Illuminate\Support\Facades\Http::timeout(15)
-            ->withHeaders([
-                'X-API-Key' => $apiKey,
-                'Content-Type' => 'application/json',
-            ])
-            ->post('https://api.agoosms.com/v1/sms/send', $body);
-
-        return response()->json([
-            'sender_id_used' => $senderId,
-            'api_status' => $response->status(),
-            'api_response' => $response->json(),
-        ]);
-    } catch (\Throwable $e) {
-        return response()->json([
-            'error' => $e->getMessage(),
-            'sender_id_used' => $senderId,
-        ], 500);
-    }
-});
-
 // Temporary route to debug push subscriptions in database
 Route::get('/debug-push-subscriptions', function () {
     try {
@@ -141,13 +89,18 @@ Route::get('/debug-push-subscriptions/purge', function (\Illuminate\Http\Request
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {
-        return $request->user();
+        $userId = $request->user()->id;
+        return \Illuminate\Support\Facades\Cache::remember("user_{$userId}", 60, function () use ($request) {
+            return $request->user();
+        });
     });
 
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::patch('/user/preferences', [UserPreferenceController::class, 'update']);
     Route::post('/push-subscriptions', [PushSubscriptionController::class, 'store']);
     Route::delete('/push-subscriptions', [PushSubscriptionController::class, 'destroy']);
+    
+    Route::post('/tasks/bulk-update', [TaskController::class, 'bulkUpdate']);
     Route::apiResource('/tasks', TaskController::class);
 
     // Instant diagnostic notification test trigger

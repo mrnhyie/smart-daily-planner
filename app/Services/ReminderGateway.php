@@ -29,7 +29,7 @@ class ReminderGateway
             ->post('https://api.agoosms.com/v1/sms/send', [
                 'to' => $to,
                 'message' => $message,
-                'sender_id' => $senderId,
+                'senderId' => $senderId,
             ]);
 
         $response->throw();
