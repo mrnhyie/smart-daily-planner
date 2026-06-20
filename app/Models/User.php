@@ -19,14 +19,15 @@ class User extends Authenticatable
         'name',
         'email',
         'phone',
-        'reminder_whatsapp',
+        'reminder_email',
         'reminder_sms',
         'reminder_push',
+        'primary_channel',
         'password',
     ];
 
     protected $casts = [
-        'reminder_whatsapp' => 'boolean',
+        'reminder_email' => 'boolean',
         'reminder_sms' => 'boolean',
         'reminder_push' => 'boolean',
     ];

@@ -106,11 +106,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Instant diagnostic notification test trigger
     Route::post('/user/test-notification', function (Request $request) {
         $user = $request->user();
-        if (!$user || !$user->phone) {
-            return response()->json(['error' => 'User does not have a phone number configured.'], 400);
-        }
 
         $sent = [];
+        $errors = [];
 
         // 1. Instant Push Test
         if ($user->reminder_push) {
@@ -120,35 +118,51 @@ Route::middleware('auth:sanctum')->group(function () {
                 $sent[] = 'push';
             } catch (\Exception $e) {
                 \Illuminate\Support\Facades\Log::error("Test Push failed: " . $e->getMessage());
+                $errors[] = 'push: ' . $e->getMessage();
             }
         }
 
-        // 2. Instant SMS Test
+        // 2. Instant Email Test (when primary channel is email)
+        if ($user->reminder_email) {
+            if (!$user->email) {
+                $errors[] = 'email: No email address set for this user.';
+            } else {
+                try {
+                    $gateway = app(\App\Services\ReminderGateway::class);
+                    $gateway->sendEmail(
+                        $user->email,
+                        'Smart Daily Planner – Test Reminder ⏰',
+                        'This is an instant email notification test! Your email reminders are active. - Smart Daily Planner'
+                    );
+                    $sent[] = 'email';
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error("Test Email failed: " . $e->getMessage());
+                    $errors[] = 'email: ' . $e->getMessage();
+                }
+            }
+        }
+
+        // 3. Instant SMS Test (when primary channel is sms)
         if ($user->reminder_sms) {
-            try {
-                $gateway = app(\App\Services\ReminderGateway::class);
-                $gateway->sendSms($user->phone, 'This is an instant SMS notification test! Your settings are active. - Daily Planner');
-                $sent[] = 'sms';
-            } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::error("Test SMS failed: " . $e->getMessage());
-            }
-        }
-
-        // 3. Instant WhatsApp Test
-        if ($user->reminder_whatsapp) {
-            try {
-                $gateway = app(\App\Services\ReminderGateway::class);
-                $gateway->sendWhatsapp($user->phone, 'This is an instant WhatsApp notification test! Your settings are active. - Daily Planner');
-                $sent[] = 'whatsapp';
-            } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::error("Test WhatsApp failed: " . $e->getMessage());
+            if (!$user->phone) {
+                $errors[] = 'sms: No phone number set for this user.';
+            } else {
+                try {
+                    $gateway = app(\App\Services\ReminderGateway::class);
+                    $gateway->sendSms($user->phone, 'This is an instant SMS notification test! Your settings are active. - Smart Daily Planner');
+                    $sent[] = 'sms';
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error("Test SMS failed: " . $e->getMessage());
+                    $errors[] = 'sms: ' . $e->getMessage();
+                }
             }
         }
 
         return response()->json([
             'message' => 'Instant test notifications triggered!',
             'sent_channels' => $sent,
-            'phone' => $user->phone
+            'errors' => $errors,
+            'primary_channel' => $user->primary_channel ?? 'email',
         ]);
     });
 });

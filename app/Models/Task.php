@@ -18,14 +18,14 @@ class Task extends Model
         'is_completed',
         'reminder_time',
         'task_order',
-        'last_whatsapp_reminded_on',
+        'last_email_reminded_on',
         'last_sms_reminded_on',
         'last_push_reminded_on',
     ];
     protected $casts = [
         'is_completed' => 'boolean',
         'task_order' => 'integer',
-        'last_whatsapp_reminded_on' => 'date:Y-m-d',
+        'last_email_reminded_on' => 'date:Y-m-d',
         'last_sms_reminded_on' => 'date:Y-m-d',
         'last_push_reminded_on' => 'date:Y-m-d',
     ];

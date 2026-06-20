@@ -53,7 +53,7 @@ class TaskController extends Controller
             'title' => 'sometimes|string|max:255',
             'description' => 'nullable|string',
             'is_completed' => 'boolean',
-            'reminder_time' => 'nullable|date_format:H:i',
+            'reminder_time' => 'nullable|regex:/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/',
             'task_order' => 'nullable|integer|min:0|max:2',
         ]);
 
@@ -71,7 +71,7 @@ class TaskController extends Controller
             'tasks.*.title' => 'required|string|max:255',
             'tasks.*.description' => 'nullable|string',
             'tasks.*.is_completed' => 'boolean',
-            'tasks.*.reminder_time' => 'nullable|date_format:H:i',
+            'tasks.*.reminder_time' => 'nullable|regex:/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/',
             'tasks.*.task_order' => 'nullable|integer|min:0|max:2',
         ]);
 

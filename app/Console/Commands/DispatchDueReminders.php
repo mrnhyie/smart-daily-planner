@@ -45,22 +45,22 @@ class DispatchDueReminders extends Command
         $dispatchedCount = 0;
 
         foreach ($dueTasks as $task) {
-            if (!$task->user || !$task->user->phone) {
+            if (!$task->user) {
                 continue;
             }
 
-            if ($task->user->reminder_whatsapp && $task->last_whatsapp_reminded_on !== $today) {
-                SendTaskReminderJob::dispatch($task->id, 'whatsapp');
-                $dispatchedCount++;
-            }
-
-            if ($task->user->reminder_sms && $task->last_sms_reminded_on !== $today) {
-                SendTaskReminderJob::dispatch($task->id, 'sms');
-                $dispatchedCount++;
-            }
-
+            // Dispatch push notification (independent, free)
             if ($task->user->reminder_push && $task->last_push_reminded_on !== $today) {
                 SendTaskReminderJob::dispatch($task->id, 'push');
+                $dispatchedCount++;
+            }
+
+            // Dispatch primary delivery channel (email or sms with auto-fallback)
+            $needsDelivery = ($task->last_email_reminded_on !== $today)
+                          || ($task->last_sms_reminded_on !== $today);
+
+            if ($needsDelivery) {
+                SendTaskReminderJob::dispatch($task->id, 'delivery');
                 $dispatchedCount++;
             }
         }
