@@ -50,11 +50,11 @@ class TaskController extends Controller
         $this->authorizeOwnership($task);
 
         $validated = $request->validate([
-            'title' => 'sometimes|string|max:255',
-            'description' => 'nullable|string',
-            'is_completed' => 'boolean',
-            'reminder_time' => 'nullable|regex:/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/',
-            'task_order' => 'nullable|integer|min:0|max:2',
+            'title'         => 'sometimes|string|max:255',
+            'description'   => 'nullable|string',
+            'is_completed'  => 'boolean',
+            'reminder_time' => ['nullable', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'task_order'    => 'nullable|integer|min:0|max:2',
         ]);
 
         $task->update($validated);
@@ -67,12 +67,12 @@ class TaskController extends Controller
     public function bulkUpdate(Request $request)
     {
         $validated = $request->validate([
-            'tasks' => 'required|array',
-            'tasks.*.title' => 'required|string|max:255',
-            'tasks.*.description' => 'nullable|string',
-            'tasks.*.is_completed' => 'boolean',
-            'tasks.*.reminder_time' => 'nullable|regex:/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/',
-            'tasks.*.task_order' => 'nullable|integer|min:0|max:2',
+            'tasks'                  => 'required|array',
+            'tasks.*.title'          => 'required|string|max:255',
+            'tasks.*.description'    => 'nullable|string',
+            'tasks.*.is_completed'   => 'boolean',
+            'tasks.*.reminder_time'  => ['nullable', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
+            'tasks.*.task_order'     => 'nullable|integer|min:0|max:2',
         ]);
 
         $user = Auth::user();
