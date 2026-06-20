@@ -23,6 +23,8 @@ class User extends Authenticatable
         'reminder_sms',
         'reminder_push',
         'primary_channel',
+        'subscribed',
+        'reminder_attempts',
         'password',
     ];
 
@@ -30,6 +32,8 @@ class User extends Authenticatable
         'reminder_email' => 'boolean',
         'reminder_sms' => 'boolean',
         'reminder_push' => 'boolean',
+        'subscribed' => 'boolean',
+        'reminder_attempts' => 'integer',
     ];
 
     protected $hidden = [

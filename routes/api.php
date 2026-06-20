@@ -99,6 +99,33 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/user/preferences', [UserPreferenceController::class, 'update']);
     Route::post('/push-subscriptions', [PushSubscriptionController::class, 'store']);
     Route::delete('/push-subscriptions', [PushSubscriptionController::class, 'destroy']);
+
+    Route::post('/user/subscribe', function (Request $request) {
+        $user = $request->user();
+        $user->update([
+            'subscribed' => true,
+        ]);
+        \Illuminate\Support\Facades\Cache::forget("user_{$user->id}");
+        return response()->json([
+            'status' => 'success',
+            'message' => 'User subscribed successfully.',
+            'user' => $user->fresh()
+        ]);
+    });
+
+    Route::post('/user/unsubscribe', function (Request $request) {
+        $user = $request->user();
+        $user->update([
+            'subscribed' => false,
+            'reminder_attempts' => 0, // Reset attempts when unsubscribing for easier re-testing
+        ]);
+        \Illuminate\Support\Facades\Cache::forget("user_{$user->id}");
+        return response()->json([
+            'status' => 'success',
+            'message' => 'User unsubscribed and attempts reset.',
+            'user' => $user->fresh()
+        ]);
+    });
     
     Route::post('/tasks/bulk-update', [TaskController::class, 'bulkUpdate']);
     Route::apiResource('/tasks', TaskController::class);

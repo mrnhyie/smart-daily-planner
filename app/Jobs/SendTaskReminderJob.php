@@ -31,9 +31,15 @@ class SendTaskReminderJob implements ShouldQueue
         $today = Carbon::today()->toDateString();
         $user = $task->user;
 
-        // --- Push notification (always independent, free) ---
+        // --- Push notification ---
         if ($this->channel === 'push') {
             if (!$user->reminder_push || $task->last_push_reminded_on === $today) {
+                return;
+            }
+
+            // Enforce free tier limit
+            if (!$user->subscribed && $user->reminder_attempts >= 3) {
+                Log::info("Push reminder skipped: free user {$user->id} has reached limit of 3 reminders.");
                 return;
             }
 
@@ -44,6 +50,11 @@ class SendTaskReminderJob implements ShouldQueue
                     $this->messageForTask($task)
                 );
                 $task->update(['last_push_reminded_on' => $today]);
+
+                if (!$user->subscribed) {
+                    $user->increment('reminder_attempts');
+                    \Illuminate\Support\Facades\Cache::forget("user_{$user->id}");
+                }
             } catch (\Throwable $e) {
                 Log::error("Push Reminder failed for task {$task->id}: " . $e->getMessage());
             }
@@ -52,6 +63,12 @@ class SendTaskReminderJob implements ShouldQueue
 
         // --- Primary delivery channel (email or sms) with auto-fallback ---
         if ($this->channel === 'delivery') {
+            // Enforce free tier limit
+            if (!$user->subscribed && $user->reminder_attempts >= 3) {
+                Log::info("Delivery reminder skipped: free user {$user->id} has reached limit of 3 reminders.");
+                return;
+            }
+
             $primaryChannel = $user->primary_channel ?? 'email';
             $message = $this->messageForTask($task);
             $delivered = false;
@@ -87,6 +104,11 @@ class SendTaskReminderJob implements ShouldQueue
             $subject = 'Task Reminder – ' . $task->title;
             $gateway->sendEmail($user->email, $subject, $message);
             $task->update(['last_email_reminded_on' => $today]);
+
+            if (!$user->subscribed) {
+                $user->increment('reminder_attempts');
+                \Illuminate\Support\Facades\Cache::forget("user_{$user->id}");
+            }
             return true;
         } catch (\Throwable $e) {
             Log::error("Email Reminder failed for task {$task->id}: " . $e->getMessage());
@@ -103,6 +125,11 @@ class SendTaskReminderJob implements ShouldQueue
         try {
             $gateway->sendSms($user->phone, $message);
             $task->update(['last_sms_reminded_on' => $today]);
+
+            if (!$user->subscribed) {
+                $user->increment('reminder_attempts');
+                \Illuminate\Support\Facades\Cache::forget("user_{$user->id}");
+            }
             return true;
         } catch (\Throwable $e) {
             Log::error("SMS Reminder failed for task {$task->id}: " . $e->getMessage());
