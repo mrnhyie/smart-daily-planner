@@ -10,6 +10,37 @@ use Illuminate\Support\Facades\Route;
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
+Route::any('/setup-db-schema', function () {
+    try {
+        try {
+            \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+        } catch (\Throwable $mErr) {}
+
+        if (!\Illuminate\Support\Facades\Schema::hasColumn('users', 'subscription_plan')) {
+            \Illuminate\Support\Facades\Schema::table('users', function (\Illuminate\Database\Schema\Blueprint $table) {
+                $table->string('subscription_plan')->nullable();
+                $table->timestamp('subscription_expires_at')->nullable();
+                $table->string('last_payment_reference')->nullable();
+            });
+        }
+        if (!\Illuminate\Support\Facades\Schema::hasColumn('users', 'reminder_attempts')) {
+            \Illuminate\Support\Facades\Schema::table('users', function (\Illuminate\Database\Schema\Blueprint $table) {
+                $table->integer('reminder_attempts')->default(0);
+            });
+        }
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Schema verified and updated successfully.',
+            'columns' => \Illuminate\Support\Facades\Schema::getColumnListing('users'),
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => $e->getMessage(),
+        ], 500);
+    }
+});
+
 // Public cron trigger route
 Route::get('/cron/reminders', function () {
     try {
@@ -165,6 +196,70 @@ Route::get('/debug-push-subscriptions', function () {
         ]);
     } catch (\Throwable $e) {
         return response()->json(['error' => $e->getMessage()], 500);
+    }
+});
+
+Route::get('/debug-push-test/{userId}', function ($userId) {
+    try {
+        $user = \App\Models\User::with('pushSubscriptions')->find($userId);
+        if (!$user) {
+            return response()->json(['error' => 'User not found'], 404);
+        }
+        $subscriptions = $user->pushSubscriptions;
+        if ($subscriptions->isEmpty()) {
+            return response()->json(['error' => 'No push subscriptions found for this user'], 404);
+        }
+
+        $webPush = new \Minishlink\WebPush\WebPush([
+            'VAPID' => [
+                'subject' => (string) config('services.webpush.subject'),
+                'publicKey' => (string) config('services.webpush.public_key'),
+                'privateKey' => (string) config('services.webpush.private_key'),
+            ],
+        ]);
+
+        foreach ($subscriptions as $subscription) {
+            $payload = json_encode([
+                'title' => 'Smart Daily Planner – Test Push 🔔',
+                'body' => 'This is an instant live test of your WebPush connection!',
+                'icon' => url('/SDP-logo.png'),
+                'badge' => url('/SDP-logo.png'),
+                'url' => '/',
+            ]);
+
+            $webPush->queueNotification(
+                \Minishlink\WebPush\Subscription::create([
+                    'endpoint' => $subscription->endpoint,
+                    'publicKey' => $subscription->public_key,
+                    'authToken' => $subscription->auth_token,
+                    'contentEncoding' => $subscription->content_encoding,
+                ]),
+                $payload
+            );
+        }
+
+        $results = [];
+        foreach ($webPush->flush() as $report) {
+            $endpoint = $report->getRequest()->getUri()->__toString();
+            $results[] = [
+                'endpoint' => parse_url($endpoint, PHP_URL_HOST),
+                'success' => $report->isSuccess(),
+                'reason' => $report->getReason(),
+                'expired' => $report->isSubscriptionExpired(),
+            ];
+        }
+
+        return response()->json([
+            'user_id' => $user->id,
+            'user_name' => $user->name,
+            'vapid_public_key' => substr((string) config('services.webpush.public_key'), 0, 15) . '...',
+            'results' => $results,
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'error' => $e->getMessage(),
+            'trace' => explode("\n", $e->getTraceAsString()),
+        ], 500);
     }
 });
 
@@ -393,65 +488,37 @@ Route::middleware('auth:sanctum')->group(function () {
         ]);
     });
 
-    // Instant diagnostic notification test trigger
+    // Instant diagnostic notification test trigger (Web Push exclusively)
     Route::post('/user/test-notification', function (Request $request) {
         $user = $request->user();
 
         $sent = [];
         $errors = [];
-        $preferences = $user->preferences ?? [];
-        $channels = $preferences['channels'] ?? ['email' => true];
 
-        // 1. Instant Push Test
-        if (!empty($channels['push'])) {
-            try {
+        // 1. Web Push Test Only
+        try {
+            $user->load('pushSubscriptions');
+            if ($user->pushSubscriptions->isEmpty()) {
+                $errors[] = 'No active push subscription found on this device. Please toggle on Push Notifications in settings first.';
+            } else {
                 $webPush = app(\App\Services\WebPushService::class);
                 $webPush->sendToUser($user, 'Instant Test! 🎉', 'This is an instant Web Push notification test! Your settings are active.');
-                $sent[] = 'push';
-            } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::error("Test Push failed: " . $e->getMessage());
-                $errors[] = 'push: ' . $e->getMessage();
+                $sent[] = 'Web Push';
             }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning("Test Push failed: " . $e->getMessage());
+            $errors[] = 'Web Push: ' . $e->getMessage();
         }
 
-        // 2. Instant Email Test
-        if (!empty($channels['email'])) {
-            if (!$user->email) {
-                $errors[] = 'email: No email address set for this user.';
-            } else {
-                try {
-                    $gateway = app(\App\Services\ReminderGateway::class);
-                    $gateway->sendEmail(
-                        $user->email,
-                        'Smart Daily Planner – Test Reminder ⏰',
-                        'This is an instant email notification test! Your email reminders are active. - Smart Daily Planner'
-                    );
-                    $sent[] = 'email';
-                } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::error("Test Email failed: " . $e->getMessage());
-                    $errors[] = 'email: ' . $e->getMessage();
-                }
-            }
-        }
-
-        // 3. Instant SMS Test
-        if (!empty($channels['sms'])) {
-            if (!$user->phone) {
-                $errors[] = 'sms: No phone number set for this user.';
-            } else {
-                try {
-                    $gateway = app(\App\Services\ReminderGateway::class);
-                    $gateway->sendSms($user->phone, 'This is an instant SMS notification test! Your settings are active. - Smart Daily Planner');
-                    $sent[] = 'sms';
-                } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::error("Test SMS failed: " . $e->getMessage());
-                    $errors[] = 'sms: ' . $e->getMessage();
-                }
-            }
+        $messageText = '';
+        if (count($sent) > 0) {
+            $messageText = 'Test notification sent via ' . implode(' & ', $sent) . '!';
+        } else {
+            $messageText = 'Could not deliver test notification: ' . implode(' | ', $errors);
         }
 
         return response()->json([
-            'message' => 'Instant test notifications triggered!',
+            'message' => $messageText,
             'sent_channels' => $sent,
             'errors' => $errors,
         ]);

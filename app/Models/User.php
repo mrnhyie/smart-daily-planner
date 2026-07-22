@@ -53,7 +53,7 @@ class User extends Authenticatable
         if ($this->subscribed && $this->subscription_expires_at && $this->subscription_expires_at->isPast()) {
             $this->update([
                 'subscribed' => false,
-                'subscription_plan' => null,
+                'subscription_plan' => 'expired',
                 'subscription_expires_at' => null,
             ]);
             \Illuminate\Support\Facades\Cache::forget("user_{$this->id}");

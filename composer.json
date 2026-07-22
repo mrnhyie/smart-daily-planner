@@ -30,7 +30,10 @@
             "App\\": "app/",
             "Database\\Factories\\": "database/factories/",
             "Database\\Seeders\\": "database/seeders/"
-        }
+        },
+        "files": [
+            "app/Overrides/Minishlink/WebPush/Encryption.php"
+        ]
     },
     "autoload-dev": {
         "psr-4": {
@@ -56,7 +59,11 @@
         ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
-            "@php artisan package:discover --ansi"
+            "@php artisan package:discover --ansi",
+            "@php scripts/patch-webpush.php"
+        ],
+        "post-install-cmd": [
+            "@php scripts/patch-webpush.php"
         ],
         "post-update-cmd": [
             "@php artisan vendor:publish --tag=laravel-assets --ansi --force"

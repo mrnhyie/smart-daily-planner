@@ -24,6 +24,14 @@
       "dest": "/public/build/$1"
     },
     {
+      "src": "/SDP-logo.png",
+      "dest": "/public/SDP-logo.png"
+    },
+    {
+      "src": "/favicon.ico",
+      "dest": "/public/SDP-logo.png"
+    },
+    {
       "src": "/(.*)",
       "dest": "/api/index.php"
     }

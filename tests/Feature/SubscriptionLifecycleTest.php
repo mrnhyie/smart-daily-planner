@@ -94,7 +94,7 @@ test('expired subscription automatically reverts to free plan when checked or fe
 
     $freshUser = $user->fresh();
     expect($freshUser->subscribed)->toBeFalse();
-    expect($freshUser->subscription_plan)->toBeNull();
+    expect($freshUser->subscription_plan)->toBe('expired');
 });
 
 test('graceful downgrade preserves user tasks and preferences', function () {
@@ -103,13 +103,12 @@ test('graceful downgrade preserves user tasks and preferences', function () {
         'subscription_plan' => 'daily',
         'subscription_expires_at' => Carbon::now()->subDay(),
         'preferences' => ['primaryChannel' => 'push', 'quietHours' => ['enabled' => true]],
+        'last_payment_reference' => 'OLD_REF',
     ]);
 
-    $tasks = [
-        $user->tasks()->create(['title' => 'Task 1', 'reminder_time' => '09:00']),
-        $user->tasks()->create(['title' => 'Task 2', 'reminder_time' => '13:00']),
-        $user->tasks()->create(['title' => 'Task 3', 'reminder_time' => '18:00']),
-    ];
+    $user->tasks()->create(['title' => 'Task 1', 'reminder_time' => '09:00']);
+    $user->tasks()->create(['title' => 'Task 2', 'reminder_time' => '13:00']);
+    $user->tasks()->create(['title' => 'Task 3', 'reminder_time' => '18:00']);
 
     expect($user->tasks()->count())->toBe(3);
 
@@ -117,7 +116,8 @@ test('graceful downgrade preserves user tasks and preferences', function () {
     $reverted = $user->checkSubscriptionExpiry();
 
     expect($reverted)->toBeTrue();
-    expect($user->fresh()->subscribed)->toBeFalse();
+    expect($freshUser = $user->fresh()->subscribed)->toBeFalse();
+    expect($user->fresh()->subscription_plan)->toBe('expired');
     expect($user->fresh()->tasks()->count())->toBe(3);
     expect($user->fresh()->preferences['primaryChannel'])->toBe('push');
 });
@@ -147,6 +147,7 @@ test('paystack webhook grants subscription on charge success event', function ()
     // Since env('PAYSTACK_SECRET_KEY') might be null or unset right now in test env, let's verify behavior
     putenv('PAYSTACK_SECRET_KEY=test_secret_123');
     $_ENV['PAYSTACK_SECRET_KEY'] = 'test_secret_123';
+    $_SERVER['PAYSTACK_SECRET_KEY'] = 'test_secret_123';
 
     $jsonPayload = json_encode($payload);
     $signature = hash_hmac('sha512', $jsonPayload, 'test_secret_123');

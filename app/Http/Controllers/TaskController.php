@@ -79,6 +79,11 @@ class TaskController extends Controller
         $newTasks = collect($validated['tasks']);
 
         DB::transaction(function () use ($user, $newTasks) {
+            if ($newTasks->isEmpty()) {
+                $user->tasks()->delete();
+                return;
+            }
+
             $ordersToKeep = $newTasks->pluck('task_order')->filter(function ($value) {
                 return $value !== null;
             })->toArray();

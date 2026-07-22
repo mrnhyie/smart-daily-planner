@@ -14,13 +14,13 @@ class WebPushService
     {
         if (!$this->isConfigured()) {
             Log::warning('Web push skipped: missing VAPID configuration.');
-            return;
+            throw new \Exception('VAPID push server keys are not configured on the backend.');
         }
 
         $subscriptions = $user->pushSubscriptions()->get();
 
         if ($subscriptions->isEmpty()) {
-            return;
+            throw new \Exception('No active browser push subscription registered for this device. Please enable Push Notifications.');
         }
 
         $webPush = new WebPush([
@@ -35,8 +35,8 @@ class WebPushService
             $payload = json_encode([
                 'title' => $title,
                 'body' => $body,
-                'icon' => '/vite.svg',
-                'badge' => '/vite.svg',
+                'icon' => url('/SDP-logo.png'),
+                'badge' => url('/SDP-logo.png'),
                 'url' => '/',
             ]);
 
@@ -51,26 +51,35 @@ class WebPushService
             );
         }
 
+        $successCount = 0;
+        $failureReasons = [];
+
         foreach ($webPush->flush() as $report) {
             $endpoint = $report->getRequest()->getUri()->__toString();
             $dbSub = $subscriptions->firstWhere('endpoint', $endpoint);
 
             if ($report->isSuccess()) {
+                $successCount++;
                 if ($dbSub) {
                     $dbSub->update(['last_used_at' => now()]);
                 }
-
                 continue;
             }
 
+            $reason = $report->getReason();
+            $failureReasons[] = $reason;
             Log::warning('Web push failed', [
                 'endpoint' => $endpoint,
-                'reason' => $report->getReason(),
+                'reason' => $reason,
             ]);
 
             if ($dbSub && $report->isSubscriptionExpired()) {
                 $dbSub->delete();
             }
+        }
+
+        if ($successCount === 0) {
+            throw new \Exception('Push delivery failed across endpoints: ' . implode('; ', $failureReasons));
         }
     }
 
