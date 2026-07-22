@@ -281,6 +281,61 @@ Route::get('/debug-push-subscriptions/purge', function (\Illuminate\Http\Request
     }
 });
 
+Route::get('/admin/stats', function (\Illuminate\Http\Request $request) {
+    try {
+        $users = \App\Models\User::withCount('tasks')->orderBy('created_at', 'desc')->get()->map(function ($u) {
+            return [
+                'id'             => (string)$u->id,
+                'name'           => $u->name ?: 'User',
+                'email'          => $u->email ?: '',
+                'phone'          => $u->phone ?: '',
+                'country'        => 'GH',
+                'subscribed'     => (bool)$u->subscribed,
+                'tasksCount'     => (int)$u->tasks_count,
+                'primaryChannel' => $u->primary_channel ?: 'email',
+            ];
+        });
+
+        $totalUsers   = $users->count();
+        $premiumUsers = $users->where('subscribed', true)->count();
+
+        return response()->json([
+            'status'          => 'success',
+            'totalUsers'      => $totalUsers,
+            'premiumUsers'    => $premiumUsers,
+            'totalRevenueGHS' => $premiumUsers * 10,
+            'totalRevenueUSD' => round($premiumUsers * 0.65, 2),
+            'users'           => $users->values(),
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json(['error' => $e->getMessage()], 500);
+    }
+});
+
+Route::post('/admin/users/{id}/toggle-subscription', function (\Illuminate\Http\Request $request, $id) {
+    try {
+        $user = \App\Models\User::find($id);
+        if (!$user) {
+            return response()->json(['error' => 'User not found'], 404);
+        }
+        $user->subscribed = !$user->subscribed;
+        $user->subscription_plan = $user->subscribed ? 'daily' : null;
+        $user->save();
+
+        return response()->json([
+            'status' => 'success',
+            'user' => [
+                'id'         => (string)$user->id,
+                'name'       => $user->name,
+                'email'      => $user->email,
+                'subscribed' => (bool)$user->subscribed,
+            ]
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json(['error' => $e->getMessage()], 500);
+    }
+});
+
 Route::post('/webhooks/paystack', function (\Illuminate\Http\Request $request) {
     $secretKey = env('PAYSTACK_SECRET_KEY');
     if (!$secretKey) {
