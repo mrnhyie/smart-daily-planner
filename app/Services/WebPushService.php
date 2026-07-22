@@ -73,8 +73,9 @@ class WebPushService
                 'reason' => $reason,
             ]);
 
-            if ($dbSub && $report->isSubscriptionExpired()) {
+            if ($dbSub && ($report->isSubscriptionExpired() || str_contains($reason, 'VapidPkHashMismatch') || str_contains($reason, 'Bad Request') || str_contains($reason, '400') || str_contains($reason, '403'))) {
                 $dbSub->delete();
+                Log::info('Purged invalid/mismatched push subscription', ['endpoint' => $endpoint, 'reason' => $reason]);
             }
         }
 
