@@ -96,7 +96,18 @@ Route::any('/admin/broadcast', function (Request $request) {
     $gateway = app(\App\Services\ReminderGateway::class);
     $smsResult = null;
     $emailResult = null;
+    $pushResult = null;
     $targeted_users = 0;
+
+    if (!empty($channels['push']) || !empty($channels['PUSH'])) {
+        try {
+            $webPush = app(\App\Services\WebPushService::class);
+            $pushResult = $webPush->sendToAllSubscriptions($title, $body, $target);
+            $targeted_users += ($pushResult['dispatched_count'] ?? 0);
+        } catch (\Throwable $e) {
+            $pushResult = ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
 
     if (!empty($channels['sms']) || !empty($channels['SMS'])) {
         $testPhone = env('ADMIN_PHONE', '+233591063119');
@@ -128,6 +139,7 @@ Route::any('/admin/broadcast', function (Request $request) {
         'channels' => array_map('strtoupper', $active),
         'smsResult' => $smsResult,
         'emailResult' => $emailResult,
+        'pushResult' => $pushResult,
     ]);
 });
 
@@ -486,62 +498,6 @@ Route::middleware('auth:sanctum')->group(function () {
     
     Route::post('/tasks/bulk-update', [TaskController::class, 'bulkUpdate']);
     Route::apiResource('/tasks', TaskController::class);
-
-    // Admin Broadcast endpoint to dispatch announcements across segments & channels
-    Route::post('/admin/broadcast', function (Request $request) {
-        $validated = $request->validate([
-            'target' => 'required|string', // ALL, PREMIUM, FREE
-            'title' => 'required|string|max:255',
-            'body' => 'required|string',
-            'channels' => 'nullable|array',
-        ]);
-
-        $query = \App\Models\User::query();
-        if ($validated['target'] === 'PREMIUM') {
-            $query->where('subscribed', true);
-        } elseif ($validated['target'] === 'FREE') {
-            $query->where('subscribed', false);
-        }
-        $users = $query->get();
-
-        $sentCount = 0;
-        $channels = $validated['channels'] ?? ['push' => true, 'email' => true];
-
-        foreach ($users as $user) {
-            if (!empty($channels['push'])) {
-                try {
-                    $webPush = app(\App\Services\WebPushService::class);
-                    $webPush->sendToUser($user, $validated['title'], $validated['body']);
-                    $sentCount++;
-                } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::warning("Broadcast Push failed for User ID {$user->id}: " . $e->getMessage());
-                }
-            }
-            if (!empty($channels['email']) && $user->email) {
-                try {
-                    $gateway = app(\App\Services\ReminderGateway::class);
-                    $gateway->sendEmail($user->email, $validated['title'], $validated['body']);
-                    $sentCount++;
-                } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::warning("Broadcast Email failed for User ID {$user->id}: " . $e->getMessage());
-                }
-            }
-        }
-
-        return response()->json([
-            'status' => 'success',
-            'message' => "Broadcast '{$validated['title']}' dispatched successfully to {$validated['target']} segment ({$users->count()} users targeted).",
-            'targeted_users' => $users->count(),
-            'dispatches_attempted' => $sentCount,
-            'broadcast' => [
-                'title' => $validated['title'],
-                'body' => $validated['body'],
-                'target' => $validated['target'],
-                'channels' => $channels,
-                'dispatched_at' => now()->toIso8601String(),
-            ]
-        ]);
-    });
 
     // Instant diagnostic notification test trigger (Web Push exclusively)
     Route::post('/user/test-notification', function (Request $request) {
