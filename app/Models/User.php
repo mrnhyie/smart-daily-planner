@@ -50,10 +50,11 @@ class User extends Authenticatable
 
     public function checkSubscriptionExpiry(): bool
     {
-        if ($this->subscribed && $this->subscription_expires_at && \Carbon\Carbon::now()->isAfter($this->subscription_expires_at)) {
+        if ($this->subscribed && $this->subscription_expires_at && $this->subscription_expires_at->isPast()) {
             $this->update([
                 'subscribed' => false,
                 'subscription_plan' => null,
+                'subscription_expires_at' => null,
             ]);
             \Illuminate\Support\Facades\Cache::forget("user_{$this->id}");
             return true;

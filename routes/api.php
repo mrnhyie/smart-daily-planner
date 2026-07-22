@@ -236,10 +236,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {
         $user = $request->user();
         $user->checkSubscriptionExpiry();
-        $userId = $user->id;
-        return \Illuminate\Support\Facades\Cache::remember("user_{$userId}", 60, function () use ($user) {
-            return $user->fresh();
-        });
+        return response()->json($user->fresh());
     });
 
     Route::post('/logout', [AuthController::class, 'logout']);
