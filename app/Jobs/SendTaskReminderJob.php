@@ -16,7 +16,7 @@ class SendTaskReminderJob implements ShouldQueue
 
     public function __construct(
         public int $taskId,
-        public string $channel,
+        public string $channel = 'all' // kept for backwards compat but not strictly needed now
     ) {
     }
 
@@ -24,116 +24,67 @@ class SendTaskReminderJob implements ShouldQueue
     {
         $task = Task::query()->with('user')->find($this->taskId);
 
-        if (!$task || !$task->user || !$task->title) {
+        if (!$task || !$task->user || !$task->title || $task->is_completed) {
             return;
         }
 
-        $today = Carbon::today()->toDateString();
         $user = $task->user;
+        $user->checkSubscriptionExpiry();
+        $preferences = $user->preferences ?? [];
+        $channels = $preferences['channels'] ?? ['email' => true];
 
-        // --- Push notification ---
-        if ($this->channel === 'push') {
-            if (!$user->reminder_push || $task->last_push_reminded_on === $today) {
-                return;
-            }
+        // Enforce free tier limit
+        if (!$user->subscribed && $user->reminder_attempts >= 3) {
+            Log::info("Reminder skipped: free user {$user->id} has reached limit of 3 reminders.");
+            return;
+        }
 
-            // Enforce free tier limit
-            if (!$user->subscribed && $user->reminder_attempts >= 3) {
-                Log::info("Push reminder skipped: free user {$user->id} has reached limit of 3 reminders.");
-                return;
-            }
+        $message = $this->messageForTask($task);
+        $sentAny = false;
 
+        // 1. Push
+        if (!empty($channels['push'])) {
             try {
-                $webPushService->sendToUser(
-                    $user,
-                    'Task Reminder',
-                    $this->messageForTask($task)
-                );
-                $task->update(['last_push_reminded_on' => $today]);
-
-                if (!$user->subscribed) {
-                    $user->increment('reminder_attempts');
-                    \Illuminate\Support\Facades\Cache::forget("user_{$user->id}");
-                }
+                $webPushService->sendToUser($user, 'Task Reminder', $message);
+                $sentAny = true;
             } catch (\Throwable $e) {
                 Log::error("Push Reminder failed for task {$task->id}: " . $e->getMessage());
             }
-            return;
         }
 
-        // --- Primary delivery channel (email or sms) with auto-fallback ---
-        if ($this->channel === 'delivery') {
-            // Enforce free tier limit
-            if (!$user->subscribed && $user->reminder_attempts >= 3) {
-                Log::info("Delivery reminder skipped: free user {$user->id} has reached limit of 3 reminders.");
-                return;
-            }
-
-            $primaryChannel = $user->primary_channel ?? 'email';
-            $message = $this->messageForTask($task);
-            $delivered = false;
-
-            // Try primary channel
-            if ($primaryChannel === 'email') {
-                $delivered = $this->tryEmail($gateway, $user, $task, $message, $today);
-                if (!$delivered) {
-                    Log::warning("Primary (email) failed for task {$task->id}, falling back to SMS.");
-                    $delivered = $this->trySms($gateway, $user, $task, $message, $today);
-                }
-            } else {
-                $delivered = $this->trySms($gateway, $user, $task, $message, $today);
-                if (!$delivered) {
-                    Log::warning("Primary (SMS) failed for task {$task->id}, falling back to email.");
-                    $delivered = $this->tryEmail($gateway, $user, $task, $message, $today);
-                }
-            }
-
-            if (!$delivered) {
-                Log::error("All delivery channels failed for task {$task->id}.");
+        // 2. Email
+        if (!empty($channels['email']) && $user->email) {
+            try {
+                $subject = 'Task Reminder – ' . $task->title;
+                $gateway->sendEmail($user->email, $subject, $message);
+                $sentAny = true;
+            } catch (\Throwable $e) {
+                Log::error("Email Reminder failed for task {$task->id}: " . $e->getMessage());
             }
         }
-    }
 
-    protected function tryEmail(ReminderGateway $gateway, $user, Task $task, string $message, string $today): bool
-    {
-        if (!$user->email || $task->last_email_reminded_on === $today) {
-            return false;
+        // 3. SMS
+        if (!empty($channels['sms']) && $user->phone) {
+            try {
+                $gateway->sendSms($user->phone, $message);
+                $sentAny = true;
+            } catch (\Throwable $e) {
+                Log::error("SMS Reminder failed for task {$task->id}: " . $e->getMessage());
+            }
         }
 
-        try {
-            $subject = 'Task Reminder – ' . $task->title;
-            $gateway->sendEmail($user->email, $subject, $message);
-            $task->update(['last_email_reminded_on' => $today]);
+        if ($sentAny) {
+            $task->update([
+                'last_reminded_at' => Carbon::now(),
+                'reminders_sent' => $task->reminders_sent + 1,
+            ]);
 
             if (!$user->subscribed) {
                 $user->increment('reminder_attempts');
                 \Illuminate\Support\Facades\Cache::forget("user_{$user->id}");
             }
-            return true;
-        } catch (\Throwable $e) {
-            Log::error("Email Reminder failed for task {$task->id}: " . $e->getMessage());
-            return false;
-        }
-    }
-
-    protected function trySms(ReminderGateway $gateway, $user, Task $task, string $message, string $today): bool
-    {
-        if (!$user->phone || $task->last_sms_reminded_on === $today) {
-            return false;
-        }
-
-        try {
-            $gateway->sendSms($user->phone, $message);
-            $task->update(['last_sms_reminded_on' => $today]);
-
-            if (!$user->subscribed) {
-                $user->increment('reminder_attempts');
-                \Illuminate\Support\Facades\Cache::forget("user_{$user->id}");
-            }
-            return true;
-        } catch (\Throwable $e) {
-            Log::error("SMS Reminder failed for task {$task->id}: " . $e->getMessage());
-            return false;
+        } else {
+            Log::warning("No reminder channels successfully delivered for task {$task->id}.");
         }
     }
 

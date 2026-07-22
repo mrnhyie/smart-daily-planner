@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\PushSubscription;
 
@@ -13,7 +14,7 @@ use App\Models\PushSubscription;
  */
 class User extends Authenticatable
 {
-    use HasApiTokens, Notifiable;
+    use HasFactory, HasApiTokens, Notifiable;
 
     protected $fillable = [
         'name',
@@ -23,7 +24,11 @@ class User extends Authenticatable
         'reminder_sms',
         'reminder_push',
         'primary_channel',
+        'preferences',
         'subscribed',
+        'subscription_plan',
+        'subscription_expires_at',
+        'last_payment_reference',
         'reminder_attempts',
         'password',
     ];
@@ -32,7 +37,9 @@ class User extends Authenticatable
         'reminder_email' => 'boolean',
         'reminder_sms' => 'boolean',
         'reminder_push' => 'boolean',
+        'preferences' => 'array',
         'subscribed' => 'boolean',
+        'subscription_expires_at' => 'datetime',
         'reminder_attempts' => 'integer',
     ];
 
@@ -40,6 +47,19 @@ class User extends Authenticatable
         'password',
         'remember_token',
     ];
+
+    public function checkSubscriptionExpiry(): bool
+    {
+        if ($this->subscribed && $this->subscription_expires_at && \Carbon\Carbon::now()->isAfter($this->subscription_expires_at)) {
+            $this->update([
+                'subscribed' => false,
+                'subscription_plan' => null,
+            ]);
+            \Illuminate\Support\Facades\Cache::forget("user_{$this->id}");
+            return true;
+        }
+        return false;
+    }
 
     public function tasks(): HasMany
     {

@@ -7,19 +7,47 @@ use Illuminate\Support\Facades\Mail;
 
 class ReminderGateway
 {
-    public function sendSms(string $to, string $message): void
+    public function sendSms(string $to, string $message, ?string $scheduleTime = null): void
     {
-        $apiKey = env('AGOO_SMS_API_KEY');
-        $senderId = env('AGOO_SMS_SENDER_ID', 'SDPLANNER');
+        $normalizedTo = trim($to);
+        if (str_starts_with($normalizedTo, '0')) {
+            $normalizedTo = '+233' . substr($normalizedTo, 1);
+        } elseif (!str_starts_with($normalizedTo, '+')) {
+            if (str_starts_with($normalizedTo, '233')) {
+                $normalizedTo = '+' . $normalizedTo;
+            } else {
+                $normalizedTo = '+233' . $normalizedTo;
+            }
+        }
+
+        if (!str_starts_with($normalizedTo, '+233')) {
+            Log::info("Skipping SMS delivery: Recipient [{$normalizedTo}] is not a Ghanaian (+233) number. Email & Push notifications active.");
+            return;
+        }
+
+        $apiKey = env('AGOO_API_KEY') ?: env('AGOO_SMS_API_KEY') ?: env('AGOOSMS_API_KEY');
+        $senderId = env('AGOO_SENDER_ID') ?: env('AGOO_SMS_SENDER_ID', 'SDPLANNER');
 
         if (empty($apiKey)) {
             // Fallback to local microservice if API key is not configured
             $response = Http::timeout(15)->post($this->baseUrl().'/send-sms', [
-                'to'      => $to,
+                'to'      => $normalizedTo,
                 'message' => $message,
             ]);
             $response->throw();
             return;
+        }
+
+        $payload = [
+            'to'        => $to,
+            'message'   => $message,
+            'senderId'  => $senderId,
+            'sender_id' => $senderId,
+        ];
+
+        if ($scheduleTime) {
+            $payload['schedule_time'] = $scheduleTime;
+            $payload['send_at'] = $scheduleTime;
         }
 
         $response = Http::timeout(15)
@@ -27,11 +55,7 @@ class ReminderGateway
                 'X-API-Key'    => $apiKey,
                 'Content-Type' => 'application/json',
             ])
-            ->post('https://api.agoosms.com/v1/sms/send', [
-                'to'       => $to,
-                'message'  => $message,
-                'senderId' => $senderId,
-            ]);
+            ->post('https://api.agoosms.com/v1/sms/send', $payload);
 
         $response->throw();
     }
