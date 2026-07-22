@@ -18,12 +18,25 @@ $app = Application::configure(basePath: dirname(__DIR__))
         //
     })->create();
 
-if (isset($_SERVER['NOW_REGION']) || env('LOG_CHANNEL') === 'stderr') {
+if (isset($_SERVER['NOW_REGION']) || isset($_SERVER['HTTP_X_VERCEL_DEPLOYMENT_URL']) || isset($_ENV['VERCEL']) || env('LOG_CHANNEL') === 'stderr') {
     $bootstrapPath = '/tmp/bootstrap';
-    if (!is_dir($bootstrapPath . '/cache')) {
-        mkdir($bootstrapPath . '/cache', 0755, true);
+    $storagePath = '/tmp/storage';
+
+    foreach ([
+        $bootstrapPath . '/cache',
+        $storagePath . '/app',
+        $storagePath . '/framework/cache/data',
+        $storagePath . '/framework/sessions',
+        $storagePath . '/framework/views',
+        $storagePath . '/logs',
+    ] as $dir) {
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
     }
+
     $app->useBootstrapPath($bootstrapPath);
+    $app->useStoragePath($storagePath);
 }
 
 return $app;

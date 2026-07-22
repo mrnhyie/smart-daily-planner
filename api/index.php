@@ -1,9 +1,11 @@
 <?php
 
-// Fix Vercel serverless SCRIPT_NAME routing prefix bug
-if (isset($_SERVER['NOW_REGION']) || isset($_SERVER['HTTP_X_VERCEL_DEPLOYMENT_URL'])) {
+// Fix Vercel serverless SCRIPT_NAME routing prefix bug and notices
+if (isset($_SERVER['NOW_REGION']) || isset($_SERVER['HTTP_X_VERCEL_DEPLOYMENT_URL']) || isset($_ENV['VERCEL'])) {
     $_SERVER['SCRIPT_NAME'] = '/index.php';
     $_SERVER['PHP_SELF'] = '/index.php';
+    error_reporting(E_ALL & ~E_NOTICE & ~E_DEPRECATED);
+    ini_set('display_errors', '0');
 }
 
 if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
